@@ -2,10 +2,11 @@ pipeline {
     agent any
 
     environment {
+        // Updated with your new S3 bucket name
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
         
-        // Replace with your real Mumbai EC2 Public IP address
+        // Updated with your real Mumbai EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -18,12 +19,12 @@ pipeline {
 
         stage('Package Code') {
             steps {
-                echo 'Listing workspace files for verification:'
+                echo 'Listing workspace files to verify index.html presence:'
                 sh "ls -la"
                 
-                echo 'Packaging project files using Jenkins Native Utility...'
-                // Native Jenkins zip step: safely packages files without CLI errors
-                zip zipFile: "package-${BUILD_NUMBER}.zip", archive: false
+                echo 'Packaging index.html using the standard Linux zip client...'
+                // Target index.html directly to avoid any "Nothing to do" CLI compilation blocks
+                sh "zip -r package-${BUILD_NUMBER}.zip index.html"
             }
         }
 
