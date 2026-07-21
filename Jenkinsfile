@@ -62,16 +62,16 @@ EOF
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP}..."
+                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP} using /tmp/ workspace mapping..."
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    # 1. Create a local workspace file copy to apply strict 400 permissions cleanly
-                    cp \$TEMP_KEY local_key.pem
-                    chmod 400 local_key.pem
+                    # 1. Write the key copy into global /tmp/ folder to fix the local "Permission Denied" block
+                    cp \$TEMP_KEY /tmp/local_key.pem
+                    chmod 400 /tmp/local_key.pem
                     
-                    # 2. Execute connection script block
-                    ssh -o StrictHostKeyChecking=no -i local_key.pem ec2-user@${env.EC2_PUBLIC_IP} '
+                    # 2. Log into your Amazon Linux EC2 instance using the path-sanitized key copy
+                    ssh -o StrictHostKeyChecking=no -i /tmp/local_key.pem ec2-user@${env.EC2_PUBLIC_IP} '
                         echo "==== Updating System Packages via YUM ===="
                         sudo yum update -y
                         
@@ -107,8 +107,8 @@ EOF
                         sudo systemctl reload nginx
                     '
                     
-                    # 3. Clean up the localized copy safely
-                    rm -f local_key.pem
+                    # 3. Securely delete the temporary key file from /tmp/
+                    rm -f /tmp/local_key.pem
                     """
                 }
             }
