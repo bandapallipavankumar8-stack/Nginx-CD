@@ -2,11 +2,11 @@ pipeline {
     agent any
 
     environment {
-        // Updated with your new S3 bucket name
+        // Target AWS S3 Bucket Name
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
         
-        // Updated with your real Mumbai EC2 Public IP address
+        // Target Mumbai EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -23,7 +23,6 @@ pipeline {
                 sh "ls -la"
                 
                 echo 'Packaging index.html using the standard Linux zip client...'
-                // Target index.html directly to avoid any "Nothing to do" CLI compilation blocks
                 sh "zip -r package-${BUILD_NUMBER}.zip index.html"
             }
         }
@@ -35,7 +34,7 @@ pipeline {
             }
         }
 
-        stage('Configure Nginx & Deploy') {
+        stage('Configure VM & Deploy') {
             steps {
                 echo "Connecting to EC2 Server at ${env.EC2_PUBLIC_IP}..."
                 
@@ -43,8 +42,14 @@ pipeline {
                 sshagent(['ec2-mumbai-key']) {
                     sh """
                     ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_PUBLIC_IP} '
-                        echo "==== Updating System & Installing Nginx ===="
-                        sudo apt update -y && sudo apt install nginx awscli unzip -y
+                        echo "==== Updating System Packages ===="
+                        sudo apt update -y
+                        
+                        echo "==== Step 1: Installing Git on Target VM ===="
+                        sudo apt install git -y
+                        
+                        echo "==== Step 2: Installing Nginx, AWS CLI, and Unzip ===="
+                        sudo apt install nginx awscli unzip -y
                         
                         echo "==== Starting Nginx Service ===="
                         sudo systemctl start nginx
@@ -62,7 +67,8 @@ pipeline {
                         echo "==== Post-Deployment Clean up ===="
                         rm package.zip
                         
-                        echo "==== Target Nginx Status ===="
+                        echo "==== Verification ===="
+                        git --version
                         sudo systemctl is-active nginx
                     '
                     """
