@@ -2,8 +2,11 @@ pipeline {
     agent any
 
     environment {
+        // Target AWS Configurations
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
+        
+        // Your Verified Amazon Linux EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -47,25 +50,29 @@ pipeline {
 EOF
                 fi
                 """
+                
+                echo 'Packaging index.html using the standard Linux zip client...'
                 sh "zip -r package-${BUILD_NUMBER}.zip index.html"
             }
         }
 
         stage('Upload to S3') {
             steps {
+                echo 'Uploading package to S3...'
                 sh "aws s3 cp package-${BUILD_NUMBER}.zip ${env.S3_BUCKET}/package-${BUILD_NUMBER}.zip --region ${env.AWS_REGION}"
             }
         }
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to Amazon Linux EC2 Server using native private key file bindings..."
+                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP}..."
                 
-                // Binds your existing 'SSH Username with private key' file path to a temporary variable
-                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'KEY_FILE_PATH')]) {
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    # Log into your Amazon Linux EC2 instance using the dynamically managed key file path
-                    ssh -o StrictHostKeyChecking=no -i \$KEY_FILE_PATH ec2-user@${env.EC2_PUBLIC_IP} '
+                    cp \$TEMP_KEY local_key.pem
+                    chmod 400 local_key.pem
+                    
+                    ssh -o StrictHostKeyChecking=no -i local_key.pem ec2-user@${env.EC2_PUBLIC_IP} '
                         echo "==== Updating System Packages via YUM ===="
                         sudo yum update -y
                         
@@ -88,13 +95,21 @@ EOF
                         echo "==== Deploying New Web Content ===="
                         sudo unzip package.zip -d /usr/share/nginx/html/
                         
+                        echo "==== Bypassing 403 Forbidden: Fixing Folder Ownership & Permissions ===="
+                        sudo chown -R nginx:nginx /usr/share/nginx/html
+                        sudo chmod -R 755 /usr/share/nginx/html
+                        
                         echo "==== Post-Deployment Clean up ===="
                         rm package.zip
+                        
+                        echo "==== Reloading Nginx Configuration ===="
+                        sudo systemctl reload nginx
                         
                         echo "==== Verification ===="
                         git --version
                         sudo systemctl is-active nginx
                     '
+                    rm -f local_key.pem
                     """
                 }
             }
