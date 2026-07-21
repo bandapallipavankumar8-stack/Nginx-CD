@@ -6,7 +6,7 @@ pipeline {
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
         
-        // Your Verified Amazon Linux EC2 Public IP address
+        // Target Amazon Linux EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -50,29 +50,24 @@ pipeline {
 EOF
                 fi
                 """
-                
-                echo 'Packaging index.html using the standard Linux zip client...'
                 sh "zip -r package-${BUILD_NUMBER}.zip index.html"
             }
         }
 
         stage('Upload to S3') {
             steps {
-                echo 'Uploading package to S3...'
                 sh "aws s3 cp package-${BUILD_NUMBER}.zip ${env.S3_BUCKET}/package-${BUILD_NUMBER}.zip --region ${env.AWS_REGION}"
             }
         }
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP}..."
+                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP} using SSH Agent..."
                 
-                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
+                // Bypasses file writing by injecting the key into the runtime session natively
+                sshagent(['ec2-mumbai-key']) {
                     sh """
-                    cp \$TEMP_KEY local_key.pem
-                    chmod 400 local_key.pem
-                    
-                    ssh -o StrictHostKeyChecking=no -i local_key.pem ec2-user@${env.EC2_PUBLIC_IP} '
+                    ssh -o StrictHostKeyChecking=no ec2-user@${env.EC2_PUBLIC_IP} '
                         echo "==== Updating System Packages via YUM ===="
                         sudo yum update -y
                         
@@ -109,7 +104,6 @@ EOF
                         git --version
                         sudo systemctl is-active nginx
                     '
-                    rm -f local_key.pem
                     """
                 }
             }
