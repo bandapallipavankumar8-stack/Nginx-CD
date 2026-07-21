@@ -2,8 +2,11 @@ pipeline {
     agent any
 
     environment {
+        // Target AWS S3 Bucket Name
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
+        
+        // Target Mumbai EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -39,7 +42,7 @@ pipeline {
     <div class="card">
         <div class="icon">✓</div>
         <h1>Deployment Success!</h1>
-        <p>Your HTML page was packaged via Jenkins and deployed to Nginx.</p>
+        <p>Your HTML page was packaged via Jenkins and deployed to Amazon Linux Nginx.</p>
         <div class="badge">Region: ap-south-1</div>
     </div>
 </body>
@@ -62,32 +65,33 @@ EOF
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to EC2 Server at ${env.EC2_PUBLIC_IP}..."
+                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP}..."
                 
+                // Uses the SSH credentials ID configured in your Jenkins global settings
                 sshagent(['ec2-mumbai-key']) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_PUBLIC_IP} '
-                        echo "==== Updating System Packages ===="
-                        sudo apt update -y
+                    ssh -o StrictHostKeyChecking=no ec2-user@${env.EC2_PUBLIC_IP} '
+                        echo "==== Updating System Packages via YUM ===="
+                        sudo yum update -y
                         
                         echo "==== Step 1: Installing Git on Target VM ===="
-                        sudo apt install git -y
+                        sudo yum install git -y
                         
-                        echo "==== Step 2: Installing Nginx, AWS CLI, and Unzip ===="
-                        sudo apt install nginx awscli unzip -y
+                        echo "==== Step 2: Installing Nginx and Unzip ===="
+                        sudo yum install nginx unzip -y
                         
                         echo "==== Starting Nginx Service ===="
                         sudo systemctl start nginx
                         sudo systemctl enable nginx
                         
-                        echo "==== Cleaning Old Web Files ===="
-                        sudo rm -rf /var/www/html/*
+                        echo "==== Cleaning Old Amazon Linux Web Files ===="
+                        sudo rm -rf /usr/share/nginx/html/*
                         
                         echo "==== Fetching Package from S3 ===="
                         aws s3 cp ${env.S3_BUCKET}/package-${BUILD_NUMBER}.zip ./package.zip --region ${env.AWS_REGION}
                         
                         echo "==== Deploying New Web Content ===="
-                        sudo unzip package.zip -d /var/www/html/
+                        sudo unzip package.zip -d /usr/share/nginx/html/
                         
                         echo "==== Post-Deployment Clean up ===="
                         rm package.zip
