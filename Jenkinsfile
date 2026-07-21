@@ -16,11 +16,7 @@ pipeline {
             steps {
                 echo "Connecting to Amazon Linux EC2 to deploy package-${params.CI_BUILD_NUMBER}.zip..."
                 
-                // FIXED: Wrapped with your Jenkins AWS Profile credentials ID to pass credentials securely
-                withCredentials([
-                    sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY'),
-                    aws(credentialsId: 'YOUR_JENKINS_AWS_CREDENTIALS_ID', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
                     ssh -o StrictHostKeyChecking=no -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
                         echo '==== Installing Dependencies ===='
@@ -33,13 +29,12 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package from S3 ===='
-                        # FIXED: Forwarding the temporary environment keys into the remote execution line
-                        AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} aws s3 cp ${env.S3_BUCKET}/package-${params.CI_BUILD_NUMBER}.zip /home/ec2-user/package.zip --region ${env.AWS_REGION}
+                        aws s3 cp ${env.S3_BUCKET}/package-${params.CI_BUILD_NUMBER}.zip /home/ec2-user/package.zip --region ${env.AWS_REGION}
                         
                         echo '==== Deploying New Web Content ===='
                         sudo unzip -o /home/ec2-user/package.zip -d /usr/share/nginx/html/
                         
-                        echo '==== Bypassing 403 Forbidden: Fixing Folder Permissions ===='
+                        echo '==== Fixing Folder Permissions ===='
                         sudo chown -R nginx:nginx /usr/share/nginx/html
                         sudo chmod -R 755 /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
