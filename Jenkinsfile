@@ -6,8 +6,8 @@ pipeline {
     }
 
     environment {
-        // FIXED: Now properly constructs the unique, direct public path to your S3 bucket area
-        S3_PUBLIC_URL = 'https://amazonaws.com'
+        // FIXED: This acts as your base path folder to dynamically fetch any build number package safely
+        S3_PUBLIC_URL = 'https://nginx-ci.s3.ap-south-1.amazonaws.com/packages'
         EC2_PUBLIC_IP = '13.203.218.120' 
     }
 
@@ -29,7 +29,7 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        // FIXED: Correctly resolves variable scopes to find the exact archive version
+                        # DYNAMIC EXECUTOR: This automatically injects the current build number onto your S3 URL
                         curl -sL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip
                         
                         echo '==== Deploying New Web Content ===='
