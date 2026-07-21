@@ -2,8 +2,11 @@ pipeline {
     agent any
 
     environment {
+        // Target AWS Configurations
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
+        
+        // Target Amazon Linux EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -59,35 +62,38 @@ EOF
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Deploying directly via inline credentials streaming..."
+                echo "Deploying directly via Jenkins Secure Copy (SCP) pipelines..."
                 
-                // Using standard string-variable parsing to pass the identity key straight to the SSH standard input stream
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    # Connect and run setup directly by piping the key into the SSH client in-memory
+                    # 1. Push the package directly from Jenkins to the Target VM using SCP
+                    scp -o StrictHostKeyChecking=no -i \$TEMP_KEY package-${BUILD_NUMBER}.zip ec2-user@${env.EC2_PUBLIC_IP}:/home/ec2-user/package.zip
+                    
+                    # 2. Run the internal system installations and extract commands remotely
                     ssh -o StrictHostKeyChecking=no -i \$TEMP_KEY ec2-user@${env.EC2_PUBLIC_IP} '
                         echo "==== Installing Dependencies ===="
                         sudo yum install git nginx unzip -y
                         
+                        echo "==== Managing Services ===="
                         sudo systemctl start nginx
                         sudo systemctl enable nginx
                         
                         echo "==== Cleaning Old Web Files ===="
                         sudo rm -rf /usr/share/nginx/html/*
                         
-                        echo "==== Fetching Package from S3 ===="
-                        aws s3 cp ${env.S3_BUCKET}/package-${BUILD_NUMBER}.zip /home/ec2-user/package.zip --region ${env.AWS_REGION}
-                        
                         echo "==== Deploying New Web Content ===="
                         sudo unzip /home/ec2-user/package.zip -d /usr/share/nginx/html/
                         
-                        echo "==== Applying Ownership & Permissions ===="
-                        sudo chmod -R 755 /usr/share/nginx/html
+                        echo "==== Bypassing 403 Forbidden: Fixing Folder Ownership & Permissions ===="
                         sudo chown -R nginx:nginx /usr/share/nginx/html
+                        sudo chmod -R 755 /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
                         sudo chcon -Rt httpd_sys_content_t /usr/share/nginx/html
                         
+                        echo "==== Post-Deployment Clean up ===="
                         rm -f /home/ec2-user/package.zip
+                        
+                        echo "==== Reloading Nginx Configuration ===="
                         sudo systemctl reload nginx
                         echo "==== DEPLOYMENT COMPLETE ===="
                     '
