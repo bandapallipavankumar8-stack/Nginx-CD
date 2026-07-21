@@ -6,8 +6,8 @@ pipeline {
     }
 
     environment {
-        S3_BUCKET = 's3://nginx-ci/packages'
-        AWS_REGION = 'ap-south-1'
+        // Public HTTP endpoint structure for your S3 bucket area
+        S3_PUBLIC_URL = 'https://amazonaws.com'
         EC2_PUBLIC_IP = '13.203.218.120' 
     }
 
@@ -28,13 +28,14 @@ pipeline {
                         echo '==== Cleaning Old Web Files ===='
                         sudo rm -rf /usr/share/nginx/html/*
                         
-                        echo '==== Fetching Package from S3 ===='
-                        aws s3 cp ${env.S3_BUCKET}/package-${params.CI_BUILD_NUMBER}.zip /home/ec2-user/package.zip --region ${env.AWS_REGION}
+                        echo '==== Fetching Package via Public HTTP URL ===='
+                        # FIXED: Uses curl to download the file directly without any local AWS identity profiles
+                        curl -sL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip
                         
                         echo '==== Deploying New Web Content ===='
                         sudo unzip -o /home/ec2-user/package.zip -d /usr/share/nginx/html/
                         
-                        echo '==== Fixing Folder Permissions ===='
+                        echo '==== Bypassing 403 Forbidden: Fixing Folder Permissions ===='
                         sudo chown -R nginx:nginx /usr/share/nginx/html
                         sudo chmod -R 755 /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
