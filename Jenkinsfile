@@ -2,11 +2,8 @@ pipeline {
     agent any
 
     environment {
-        // Target AWS Configurations
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
-        
-        // Target Amazon Linux EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -62,53 +59,38 @@ EOF
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP} using /tmp/ workspace mapping..."
+                echo "Deploying directly via inline credentials streaming..."
                 
+                // Using standard string-variable parsing to pass the identity key straight to the SSH standard input stream
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    # 1. Write the key copy into global /tmp/ folder to fix the local "Permission Denied" block
-                    cp \$TEMP_KEY /tmp/local_key.pem
-                    chmod 400 /tmp/local_key.pem
-                    
-                    # 2. Log into your Amazon Linux EC2 instance using the path-sanitized key copy
-                    ssh -o StrictHostKeyChecking=no -i /tmp/local_key.pem ec2-user@${env.EC2_PUBLIC_IP} '
-                        echo "==== Updating System Packages via YUM ===="
-                        sudo yum update -y
+                    # Connect and run setup directly by piping the key into the SSH client in-memory
+                    ssh -o StrictHostKeyChecking=no -i \$TEMP_KEY ec2-user@${env.EC2_PUBLIC_IP} '
+                        echo "==== Installing Dependencies ===="
+                        sudo yum install git nginx unzip -y
                         
-                        echo "==== Step 1: Installing Git on Target VM ===="
-                        sudo yum install git -y
-                        
-                        echo "==== Step 2: Installing Nginx and Unzip ===="
-                        sudo yum install nginx unzip -y
-                        
-                        echo "==== Starting Nginx Service ===="
                         sudo systemctl start nginx
                         sudo systemctl enable nginx
                         
-                        echo "==== Cleaning Old Amazon Linux Web Files ===="
+                        echo "==== Cleaning Old Web Files ===="
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo "==== Fetching Package from S3 ===="
-                        aws s3 cp ${env.S3_BUCKET}/package-${BUILD_NUMBER}.zip ./package.zip --region ${env.AWS_REGION}
+                        aws s3 cp ${env.S3_BUCKET}/package-${BUILD_NUMBER}.zip /home/ec2-user/package.zip --region ${env.AWS_REGION}
                         
                         echo "==== Deploying New Web Content ===="
-                        sudo unzip package.zip -d /usr/share/nginx/html/
+                        sudo unzip /home/ec2-user/package.zip -d /usr/share/nginx/html/
                         
-                        echo "==== Bypassing 403 Forbidden: Fixing Folder Ownership & Permissions ===="
-                        sudo chown -R nginx:nginx /usr/share/nginx/html
+                        echo "==== Applying Ownership & Permissions ===="
                         sudo chmod -R 755 /usr/share/nginx/html
+                        sudo chown -R nginx:nginx /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
                         sudo chcon -Rt httpd_sys_content_t /usr/share/nginx/html
                         
-                        echo "==== Post-Deployment Clean up ===="
-                        rm package.zip
-                        
-                        echo "==== Reloading Nginx Configuration ===="
+                        rm -f /home/ec2-user/package.zip
                         sudo systemctl reload nginx
+                        echo "==== DEPLOYMENT COMPLETE ===="
                     '
-                    
-                    # 3. Securely delete the temporary key file from /tmp/
-                    rm -f /tmp/local_key.pem
                     """
                 }
             }
