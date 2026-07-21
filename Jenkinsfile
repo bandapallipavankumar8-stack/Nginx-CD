@@ -59,20 +59,13 @@ EOF
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to Amazon Linux EC2 Server via raw environment key mapping..."
+                echo "Connecting to Amazon Linux EC2 Server using native private key file bindings..."
                 
-                // Bypasses the SSH-Agent plugin by binding the key text directly to an environment string
-                withCredentials([string(credentialsId: 'ec2_pem_string', variable: 'RAW_PEM')]) {
+                // Binds your existing 'SSH Username with private key' file path to a temporary variable
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'KEY_FILE_PATH')]) {
                     sh """
-                    # 1. Write out the key to a localized temporary file
-                    echo "${RAW_PEM}" > private_key.pem
-                    
-                    # 2. Convert any hidden carriage return lines to prevent OpenSSH key rejections
-                    sed -i 's/\\r//g' private_key.pem
-                    chmod 400 private_key.pem
-                    
-                    # 3. Log into your Amazon Linux EC2 instance using the sanitized identity file
-                    ssh -o StrictHostKeyChecking=no -i private_key.pem ec2-user@${env.EC2_PUBLIC_IP} '
+                    # Log into your Amazon Linux EC2 instance using the dynamically managed key file path
+                    ssh -o StrictHostKeyChecking=no -i \$KEY_FILE_PATH ec2-user@${env.EC2_PUBLIC_IP} '
                         echo "==== Updating System Packages via YUM ===="
                         sudo yum update -y
                         
@@ -102,9 +95,6 @@ EOF
                         git --version
                         sudo systemctl is-active nginx
                     '
-                    
-                    # 4. Securely destroy the temporary workspace key file
-                    rm -f private_key.pem
                     """
                 }
             }
