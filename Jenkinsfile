@@ -2,11 +2,10 @@ pipeline {
     agent any
 
     environment {
-        // Target AWS Details
-        S3_BUCKET = 's3:/nginx-ci/packages'
+        S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
         
-        // 1. CHANGE THIS: Replace with your actual Mumbai EC2 Public IP address
+        // Replace with your real Mumbai EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -19,8 +18,12 @@ pipeline {
 
         stage('Package Code') {
             steps {
-                echo 'Packaging project files and index.html...'
-                sh "zip -r package-${BUILD_NUMBER}.zip . -x '*.git*' 'Jenkinsfile' 'README.md' '.gitignore'"
+                echo 'Listing workspace files for verification:'
+                sh "ls -la"
+                
+                echo 'Packaging project files using Jenkins Native Utility...'
+                // Native Jenkins zip step: safely packages files without CLI errors
+                zip zipFile: "package-${BUILD_NUMBER}.zip", archive: false
             }
         }
 
@@ -35,10 +38,10 @@ pipeline {
             steps {
                 echo "Connecting to EC2 Server at ${env.EC2_PUBLIC_IP}..."
                 
-                // Uses the SSH credentials ID you saved in Jenkins Step 1
+                // Uses the SSH credentials ID configured in your Jenkins global settings
                 sshagent(['ec2-mumbai-key']) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${env.EC2_PUBLIC_IP} '
+                    ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_PUBLIC_IP} '
                         echo "==== Updating System & Installing Nginx ===="
                         sudo apt update -y && sudo apt install nginx awscli unzip -y
                         
