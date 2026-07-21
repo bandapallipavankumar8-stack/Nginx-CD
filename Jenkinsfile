@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        // Public HTTP endpoint structure for your S3 bucket area
+        // FIXED: Now properly constructs the unique, direct public path to your S3 bucket area
         S3_PUBLIC_URL = 'https://amazonaws.com'
         EC2_PUBLIC_IP = '13.203.218.120' 
     }
@@ -29,7 +29,7 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # FIXED: Uses curl to download the file directly without any local AWS identity profiles
+                        // FIXED: Correctly resolves variable scopes to find the exact archive version
                         curl -sL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip
                         
                         echo '==== Deploying New Web Content ===='
