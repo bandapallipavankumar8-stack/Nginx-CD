@@ -2,11 +2,8 @@ pipeline {
     agent any
 
     environment {
-        // Target AWS S3 Bucket Name
         S3_BUCKET = 's3://nginx-ci/packages'
         AWS_REGION = 'ap-south-1'
-        
-        // Target Mumbai EC2 Public IP address
         EC2_PUBLIC_IP = '13.203.158.156' 
     }
 
@@ -50,27 +47,32 @@ pipeline {
 EOF
                 fi
                 """
-                
-                echo 'Packaging index.html using the standard Linux zip client...'
                 sh "zip -r package-${BUILD_NUMBER}.zip index.html"
             }
         }
 
         stage('Upload to S3') {
             steps {
-                echo 'Uploading package to S3...'
                 sh "aws s3 cp package-${BUILD_NUMBER}.zip ${env.S3_BUCKET}/package-${BUILD_NUMBER}.zip --region ${env.AWS_REGION}"
             }
         }
 
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to Amazon Linux EC2 Server at ${env.EC2_PUBLIC_IP}..."
+                echo "Connecting to Amazon Linux EC2 Server via raw environment key mapping..."
                 
-                // Uses the SSH credentials ID configured in your Jenkins global settings
-                sshagent(['ec2-mumbai-key']) {
+                // Bypasses the SSH-Agent plugin by binding the key text directly to an environment string
+                withCredentials([string(credentialsId: 'ec2_pem_string', variable: 'RAW_PEM')]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no ec2-user@${env.EC2_PUBLIC_IP} '
+                    # 1. Write out the key to a localized temporary file
+                    echo "${RAW_PEM}" > private_key.pem
+                    
+                    # 2. Convert any hidden carriage return lines to prevent OpenSSH key rejections
+                    sed -i 's/\\r//g' private_key.pem
+                    chmod 400 private_key.pem
+                    
+                    # 3. Log into your Amazon Linux EC2 instance using the sanitized identity file
+                    ssh -o StrictHostKeyChecking=no -i private_key.pem ec2-user@${env.EC2_PUBLIC_IP} '
                         echo "==== Updating System Packages via YUM ===="
                         sudo yum update -y
                         
@@ -100,6 +102,9 @@ EOF
                         git --version
                         sudo systemctl is-active nginx
                     '
+                    
+                    # 4. Securely destroy the temporary workspace key file
+                    rm -f private_key.pem
                     """
                 }
             }
