@@ -8,7 +8,7 @@ pipeline {
     environment {
         // FIXED: This acts as your base path folder to dynamically fetch any build number package safely
         S3_PUBLIC_URL = 'https://nginx-ci.s3.ap-south-1.amazonaws.com/packages'
-        EC2_PUBLIC_IP = '3.110.165.3' 
+        EC2_PUBLIC_IP = '65.0.110.234' 
     }
 
     stages {
