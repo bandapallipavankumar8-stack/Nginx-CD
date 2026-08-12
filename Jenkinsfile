@@ -6,8 +6,7 @@ pipeline {
     }
 
     environment {
-        // FIXED: Restored the complete S3 bucket endpoint URL
-        S3_PUBLIC_URL = 'https://amazonaws.com'
+        // Your verified target EC2 application server IP address
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
 
@@ -32,7 +31,8 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        if ! curl -sfL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
+                        # Matches your working Nginx-CI upload path exactly
+                        if ! curl -sfL https://amazonaws.com{params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
                         fi
@@ -52,6 +52,7 @@ pipeline {
                         sudo chmod -R 755 /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
                         
+                        # Safe SELinux check to avoid hanging
                         if command -v chcon >/dev/null 2>&1; then
                             sudo chcon -Rt httpd_sys_content_t /usr/share/nginx/html || true
                         fi
