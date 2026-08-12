@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        // Your target application machine Public IP address
+        // Target app server IP address
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
 
@@ -16,9 +16,9 @@ pipeline {
                 echo "Connecting to Amazon Linux EC2 to deploy package-${params.CI_BUILD_NUMBER}.zip..."
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
-                    // Triple single quotes fix the variable parsing issue completely
-                    sh '''
-                    ssh -o StrictHostKeyChecking=no -T -i ${TEMP_KEY} ec2-user@${EC2_PUBLIC_IP} "
+                    // Double quotes force Jenkins to bake the right URL straight into the command
+                    sh """
+                    ssh -o StrictHostKeyChecking=no -T -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
                         echo '==== Cleaning Package Cache ===='
                         sudo yum clean all
                         
@@ -32,8 +32,8 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # FIXED: Complete S3 path with standard Linux shell variables
-                        if ! curl -sfL https://amazonaws.com{CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
+                        # FORCE DEPLOY FIX: Full explicit URL with proper parameter matching
+                        if ! curl -sfL https://amazonaws.com{params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
                         fi
@@ -61,7 +61,7 @@ pipeline {
                         sudo systemctl reload nginx
                         echo '==== DEPLOYMENT COMPLETE ===='
                     "
-                    '''
+                    """
                 }
             }
         }
