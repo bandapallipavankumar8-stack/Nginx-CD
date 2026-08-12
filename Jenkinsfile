@@ -18,9 +18,12 @@ pipeline {
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
-                        echo '==== Installing Dependencies ===='
-                        sudo yum install git nginx unzip -y
+                    ssh -o StrictHostKeyChecking=no -T -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
+                        echo '==== Cleaning Package Cache ===='
+                        sudo yum clean all
+                        
+                        echo '==== Installing Dependencies Safely ===='
+                        sudo yum install git nginx unzip -y -q
                         
                         sudo systemctl start nginx
                         sudo systemctl enable nginx
@@ -39,7 +42,11 @@ pipeline {
                         sudo chown -R nginx:nginx /usr/share/nginx/html
                         sudo chmod -R 755 /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
-                        sudo chcon -Rt httpd_sys_content_t /usr/share/nginx/html
+                        
+                        # Safe SELinux check to avoid hanging
+                        if command -v chcon >/dev/null 2>&1; then
+                            sudo chcon -Rt httpd_sys_content_t /usr/share/nginx/html || true
+                        fi
                         
                         rm -f /home/ec2-user/package.zip
                         sudo systemctl reload nginx
