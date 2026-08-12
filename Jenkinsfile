@@ -6,8 +6,8 @@ pipeline {
     }
 
     environment {
-        // FIXED: Base path folder to dynamically fetch any build number package safely
-        S3_PUBLIC_URL = 'https://nginx-ci.s3.ap-south-1.amazonaws.com/packages'
+        // Base path folder to dynamically fetch any build number package safely
+        S3_PUBLIC_URL = 'https://amazonaws.com'
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
 
@@ -18,7 +18,7 @@ pipeline {
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no -T -i \ whitespaces_escape\${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
+                    ssh -o StrictHostKeyChecking=no -T -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
                         echo '==== Cleaning Package Cache ===='
                         sudo yum clean all
                         
@@ -32,14 +32,14 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # FIXED: Added -f flag so curl fails instantly if S3 returns a 404 or 403 error
+                        # Added -f flag so curl fails instantly if S3 returns a 404 or 403 error
                         if ! curl -sfL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
                         fi
                         
                         echo '==== Validating Zip File Integrity ===='
-                        # FIXED: Ensures the downloaded file is actually a valid zip file before proceeding
+                        # Ensures the downloaded file is actually a valid zip file before proceeding
                         if ! unzip -t /home/ec2-user/package.zip >/dev/null 2>&1; then
                             echo 'ERROR: Downloaded file is corrupt or is an AWS XML error page.'
                             rm -f /home/ec2-user/package.zip
