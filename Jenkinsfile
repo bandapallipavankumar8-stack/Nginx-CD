@@ -9,17 +9,26 @@ pipeline {
         // Your target application machine Public IP address
         EC2_PUBLIC_IP = '3.109.207.176' 
         
-        // FIXED: Added your exact S3 bucket path explicitly as an environment variable
+        // Your exact S3 Bucket storage path
         S3_BUCKET_PATH = 's3://nginx-ci/packages'
     }
 
     stages {
-        stage('Configure VM & Deploy') {
+        stage('Fetch from S3 & Deploy to VM') {
             steps {
-                echo "Connecting to Amazon Linux EC2 to deploy package-${params.CI_BUILD_NUMBER}.zip..."
+                echo "Fetching package-${params.CI_BUILD_NUMBER}.zip on Jenkins Master..."
+                
+                // STEP 1: Download from S3 onto Jenkins Master (Works because Jenkins has the Admin IAM Role)
+                sh "aws s3 cp ${env.S3_BUCKET_PATH}/package-${params.CI_BUILD_NUMBER}.zip ./package.zip --region ap-south-1"
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
-                    // Triple double-quotes allow Jenkins to handle variable injection safely
+                    
+                    echo "Sending package to Target EC2 Machine..."
+                    // STEP 2: Securely copy (SCP) the file from Jenkins onto your Target Server
+                    sh "scp -o StrictHostKeyChecking=no -i \${TEMP_KEY} ./package.zip ec2-user@${env.EC2_PUBLIC_IP}:/home/ec2-user/package.zip"
+                    
+                    echo "Connecting via SSH to extract and deploy web files..."
+                    // STEP 3: Connect via SSH to unpack the file and configure Nginx permissions
                     sh """
                     ssh -o StrictHostKeyChecking=no -T -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
                         echo '==== Cleaning Package Cache ===='
@@ -34,16 +43,9 @@ pipeline {
                         echo '==== Cleaning Old Web Files ===='
                         sudo rm -rf /usr/share/nginx/html/*
                         
-                        echo '==== Fetching Package via Public HTTP URL ===='
-                        # FIXED: This line automatically translates your s3:// bucket variable into a valid download web link
-                        if ! curl -sfL https://amazonaws.com{params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
-                            echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
-                            exit 1
-                        fi
-                        
                         echo '==== Validating Zip File Integrity ===='
                         if ! unzip -t /home/ec2-user/package.zip >/dev/null 2>&1; then
-                            echo 'ERROR: Downloaded file is corrupt or is an AWS XML error page.'
+                            echo 'ERROR: Downloaded file is corrupt.'
                             rm -f /home/ec2-user/package.zip
                             exit 1
                         fi
@@ -51,7 +53,7 @@ pipeline {
                         echo '==== Deploying New Web Content ===='
                         sudo unzip -o /home/ec2-user/package.zip -d /usr/share/nginx/html/
                         
-                        echo '==== Bypassing 403 Forbidden: Fixing Folder Permissions ===='
+                        echo '==== Fixing Folder Permissions ===='
                         sudo chown -R nginx:nginx /usr/share/nginx/html
                         sudo chmod -R 755 /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
@@ -67,6 +69,14 @@ pipeline {
                     """
                 }
             }
+        }
+    }
+    
+    post {
+        always {
+            echo "Cleaning up workspace zip files on Jenkins Master..."
+            // Cleans up the workspace on the Jenkins machine side
+            sh "rm -f ./package.zip"
         }
     }
 }
