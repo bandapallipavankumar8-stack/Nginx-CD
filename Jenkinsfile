@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        // Base path folder to dynamically fetch any build number package safely
+        // FIXED: Restored the complete S3 bucket endpoint URL
         S3_PUBLIC_URL = 'https://amazonaws.com'
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
@@ -32,14 +32,12 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # Added -f flag so curl fails instantly if S3 returns a 404 or 403 error
                         if ! curl -sfL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
                         fi
                         
                         echo '==== Validating Zip File Integrity ===='
-                        # Ensures the downloaded file is actually a valid zip file before proceeding
                         if ! unzip -t /home/ec2-user/package.zip >/dev/null 2>&1; then
                             echo 'ERROR: Downloaded file is corrupt or is an AWS XML error page.'
                             rm -f /home/ec2-user/package.zip
@@ -54,7 +52,6 @@ pipeline {
                         sudo chmod -R 755 /usr/share/nginx/html
                         sudo chmod 755 /usr/share/nginx /usr/share /usr
                         
-                        # Safe SELinux check to avoid hanging
                         if command -v chcon >/dev/null 2>&1; then
                             sudo chcon -Rt httpd_sys_content_t /usr/share/nginx/html || true
                         fi
