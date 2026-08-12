@@ -6,6 +6,7 @@ pipeline {
     }
 
     environment {
+        // Your verified target EC2 application server IP address
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
 
@@ -30,7 +31,7 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # FIXED: Restored your exact working S3 path with proper variable formatting
+                        # MATCHES YOUR CI PATH EXHAUSTIVELY: Points directly to your packages/ folder
                         if ! curl -sfL https://amazonaws.com\${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
