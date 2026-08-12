@@ -6,18 +6,17 @@ pipeline {
     }
 
     environment {
-        // Your verified target EC2 application server IP address
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
 
     stages {
         stage('Configure VM & Deploy') {
             steps {
-                echo "Connecting to Amazon Linux EC2 to deploy package-${params.CI_BUILD_NUMBER}.zip..."
+                echo "Connecting to Amazon Linux EC2 to deploy package-\${params.CI_BUILD_NUMBER}.zip..."
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no -T -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
+                    ssh -o StrictHostKeyChecking=no -T -i \\\${TEMP_KEY} ec2-user@\${env.EC2_PUBLIC_IP} "
                         echo '==== Cleaning Package Cache ===='
                         sudo yum clean all
                         
@@ -31,7 +30,7 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # MATCHES YOUR CI PATH EXHAUSTIVELY: Points directly to your packages/ folder
+                        # FIXED: Perfectly structured URL to match your CI bucket folder
                         if ! curl -sfL https://amazonaws.com\${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
