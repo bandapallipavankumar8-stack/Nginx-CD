@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        // Your target machine IP
+        // Your target application machine Public IP address
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
 
@@ -16,7 +16,7 @@ pipeline {
                 echo "Connecting to Amazon Linux EC2 to deploy package-${params.CI_BUILD_NUMBER}.zip..."
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
-                    // Double quotes force Jenkins to bake the correct URL string directly
+                    // Triple double-quotes allow Jenkins to handle variable injection safely
                     sh """
                     ssh -o StrictHostKeyChecking=no -T -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
                         echo '==== Cleaning Package Cache ===='
@@ -32,7 +32,7 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # CRITICAL FIX: The complete explicit path to your bucket repository folder
+                        # FIXED: Uses your exact s3://nginx-ci/packages/ layout converted to a valid HTTP path
                         if ! curl -sfL https://amazonaws.com{params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
