@@ -30,8 +30,8 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # FIXED: Properly escaped dollar syntax handles variable substitution perfectly
-                        if ! curl -sfL https://amazonaws.com{params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
+                        # FIXED: Restored your exact working S3 path with proper variable formatting
+                        if ! curl -sfL https://amazonaws.com\${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
                             echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
                             exit 1
                         fi
