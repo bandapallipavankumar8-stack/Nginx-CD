@@ -6,6 +6,7 @@ pipeline {
     }
 
     environment {
+        // Target machine IP address
         EC2_PUBLIC_IP = '3.109.207.176' 
     }
 
@@ -15,7 +16,6 @@ pipeline {
                 echo "Connecting to Amazon Linux EC2 to deploy package-${params.CI_BUILD_NUMBER}.zip..."
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
-                    // FIXED: Changed to single quotes so string interpolation happens safely on the shell level
                     sh '''
                     ssh -o StrictHostKeyChecking=no -T -i ${TEMP_KEY} ec2-user@${EC2_PUBLIC_IP} "
                         echo '==== Cleaning Package Cache ===='
