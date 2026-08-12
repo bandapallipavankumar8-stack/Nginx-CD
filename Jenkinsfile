@@ -18,7 +18,7 @@ pipeline {
                 
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2-mumbai-key', keyFileVariable: 'TEMP_KEY')]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no -T -i \${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
+                    ssh -o StrictHostKeyChecking=no -T -i \ whitespaces_escape\${TEMP_KEY} ec2-user@${env.EC2_PUBLIC_IP} "
                         echo '==== Cleaning Package Cache ===='
                         sudo yum clean all
                         
@@ -32,8 +32,19 @@ pipeline {
                         sudo rm -rf /usr/share/nginx/html/*
                         
                         echo '==== Fetching Package via Public HTTP URL ===='
-                        # DYNAMIC EXECUTOR: This automatically injects the current build number onto your S3 URL
-                        curl -sL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip
+                        # FIXED: Added -f flag so curl fails instantly if S3 returns a 404 or 403 error
+                        if ! curl -sfL ${env.S3_PUBLIC_URL}/package-${params.CI_BUILD_NUMBER}.zip -o /home/ec2-user/package.zip; then
+                            echo 'ERROR: Failed to download package from S3. Please verify the build number or S3 permissions.'
+                            exit 1
+                        fi
+                        
+                        echo '==== Validating Zip File Integrity ===='
+                        # FIXED: Ensures the downloaded file is actually a valid zip file before proceeding
+                        if ! unzip -t /home/ec2-user/package.zip >/dev/null 2>&1; then
+                            echo 'ERROR: Downloaded file is corrupt or is an AWS XML error page.'
+                            rm -f /home/ec2-user/package.zip
+                            exit 1
+                        fi
                         
                         echo '==== Deploying New Web Content ===='
                         sudo unzip -o /home/ec2-user/package.zip -d /usr/share/nginx/html/
